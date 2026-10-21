@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#100b19">
+<title>Valentina · Audio del chat</title>
+<style>
+:root{color-scheme:dark;--bg:#100b19;--panel:#1b1226;--line:#513166;--pink:#ff36cf;--purple:#a855f7;--text:#f8efff;--muted:#c4b3d2;--good:#6ee7a8;--bad:#ff8b9d}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at top,#28123a 0%,var(--bg) 62%);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:20px}
+main{width:min(720px,100%);margin:0 auto}
+header{padding:12px 2px 18px}
+h1{font-size:clamp(1.5rem,5vw,2.2rem);margin:0 0 5px;letter-spacing:.02em}
+header p,.hint{color:var(--muted);margin:0}
+.card{background:rgba(27,18,38,.94);border:1px solid var(--line);border-radius:18px;padding:18px;margin:0 0 14px;box-shadow:0 8px 32px #0003}
+.status{display:flex;align-items:center;gap:10px;margin-bottom:12px;color:var(--muted);font-size:.95rem}
+.dot{width:10px;height:10px;border-radius:50%;background:#9b8aa7;flex:0 0 auto}.dot.good{background:var(--good);box-shadow:0 0 12px #6ee7a866}.dot.bad{background:var(--bad)}
+button,select,input[type=range]{accent-color:var(--pink)}
+button,select{font:inherit}
+button{border:1px solid #70418b;border-radius:12px;padding:12px 14px;background:#30163e;color:white;cursor:pointer;min-height:44px}
+button.primary{background:linear-gradient(100deg,#ff24c8,#8c35e8);border:0;font-weight:700}
+button:disabled{opacity:.55;cursor:wait}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--pink);outline-offset:3px}
+.buttons{display:flex;gap:10px;flex-wrap:wrap}
+label{display:block;margin:12px 0 6px;font-weight:600}
+select{width:100%;background:#100b19;color:var(--text);border:1px solid #604176;border-radius:10px;padding:11px}
+input[type=range]{width:100%}
+.check{display:flex;align-items:center;gap:9px;font-weight:500;margin:10px 0}
+.check input{width:18px;height:18px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.note{font-size:.9rem;color:var(--muted)}
+#log{display:flex;flex-direction:column;gap:8px;max-height:270px;overflow:auto}
+.msg{padding:10px 12px;background:#120c1b;border:1px solid #392249;border-radius:10px;overflow-wrap:anywhere}
+.msg strong{color:#ff8be2}.msg small{display:block;color:var(--muted);margin-top:3px}
+footer{color:var(--muted);font-size:.82rem;padding:0 3px 20px}
+@media(max-width:540px){body{padding:12px}.card{padding:14px}.grid{grid-template-columns:1fr}.buttons button{flex:1 1 100%}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>🎧 Valentina · Audio del chat</h1>
+  <p>Lee en voz alta únicamente los comentarios de la gente que llegan por el puente de Valentina.</p>
+</header>
+<section class="card">
+  <div class="status"><span id="dot" class="dot"></span><span id="status">Desconectada. Pulsa conectar para empezar.</span></div>
+  <div class="buttons">
+    <button id="connect" class="primary">Conectar con Valentina</button>
+    <button id="stop">Detener conexión</button>
+  </div>
+  <p class="note" style="margin-top:12px">Usa la misma base de datos y sala <b>main</b> que el puente de Valentina. Los regalos, eventos del sistema y mensajes antiguos no se leen.</p>
+</section>
+<section class="card">
+  <h2 style="margin:0 0 8px">Voz</h2>
+  <label class="check"><input id="readNames" type="checkbox" checked> Leer el nombre del usuario</label>
+  <label for="voice">Voz disponible en este dispositivo</label>
+  <select id="voice"><option value="">Voz predeterminada del dispositivo</option></select>
+  <div class="grid">
+    <div><label for="speed">Velocidad: <span id="speedVal">1.0×</span></label><input id="speed" type="range" min=".65" max="1.7" step=".05" value="1"></div>
+    <div><label for="volume">Volumen: <span id="volumeVal">100%</span></label><input id="volume" type="range" min="0" max="1" step=".05" value="1"></div>
+  </div>
+  <div class="buttons" style="margin-top:14px">
+    <button id="unlock" class="primary">Activar audio</button>
+    <button id="test">Probar voz</button>
+    <button id="clear">Limpiar lista</button>
+  </div>
+</section>
+<section class="card">
+  <h2 style="margin:0 0 8px">Audio en segundo plano</h2>
+  <label class="check"><input id="keepAlive" type="checkbox"> Mantener un sonido casi inaudible activo</label>
+  <p class="note">Al activarlo, se genera un tono muy débil después de pulsar «Activar audio». Sirve para evitar que algunas páginas consideren que el audio está inactivo, pero no puede impedir todos los bloqueos de iOS/Safari. Si lo escuchas claramente, desactívalo.</p>
+</section>
+<section class="card">
+  <h2 style="margin:0 0 10px">Comentarios recientes</h2>
+  <div id="log"><div class="msg">Los comentarios nuevos aparecerán aquí.</div></div>
+</section>
+<footer>Valentina Chat Audio · Solo escucha rooms/main/messages con type="chat". No incluye música, cola, regalos ni módulos de Sue.</footer>
+</main>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getDatabase, ref, onValue, query, limitToLast } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA5YD-m6NZXyic16A0yHXo7RNJ5b-8U8Uk",
+  authDomain: "valentina-music.firebaseapp.com",
+  databaseURL: "https://valentina-music-default-rtdb.firebaseio.com",
+  projectId: "valentina-music",
+  storageBucket: "valentina-music.firebasestorage.app",
+  messagingSenderId: "802700860379",
+  appId: "1:802700860379:web:b7f114b77101f9d4e725fe"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+const room = "main";
+const $ = id => document.getElementById(id);
+let unsubscribe = null;
+let connected = false;
+let audioUnlocked = false;
+let voices = [];
+let keepAliveContext = null;
+let keepAliveOsc = null;
+let keepAliveGain = null;
+let queue = [];
+let speaking = false;
+let seenIds = new Set();
+let firstSnapshot = true;
+
+function setStatus(text, kind="") {
+  $("status").textContent = text;
+  $("dot").className = "dot" + (kind ? " " + kind : "");
+}
+function sanitizeForSpeech(value) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .replace(/https?:\/\/\S+/giu, " enlace ")
+    .replace(/(?:[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u{1F3FB}-\u{1F3FF}]|[\uFE0E\uFE0F\u200D\u20E3])+/gu, " ")
+    .replace(/[\p{So}\p{Sk}\p{Cf}]/gu, " ")
+    .replace(/[^\p{L}\p{N}\s.,!?¿¡:;'"()\-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function isHumanComment(item) {
+  if (!item || item.type !== "chat") return false;
+  const raw = String(item.text ?? item.message ?? "").trim();
+  if (!raw) return false;
+  if (/^(?:\/|!)(?:play|skip)\b/i.test(raw)) return false;
+  if (/ha empezado a seguir|empez[oó] a seguir|started following|joined the live|se ha unido|entr[oó] al live|ha compartido el live|comparti[oó] el live|shared the live|ha enviado|envi[oó] un regalo|sent a gift|gifted|regalo de|ha dado me gusta|liked the live/i.test(raw)) return false;
+  const msg = sanitizeForSpeech(raw);
+  return Boolean(msg);
+}
+function refreshVoices() {
+  voices = window.speechSynthesis?.getVoices?.() || [];
+  const previous = $("voice").value;
+  $("voice").replaceChildren(new Option("Voz predeterminada del dispositivo", ""));
+  voices.filter(v => /^es(?:-|$)/i.test(v.lang)).concat(voices.filter(v => !/^es(?:-|$)/i.test(v.lang))).forEach(v => {
+    const opt = new Option(`${v.name} (${v.lang})`, v.name);
+    $("voice").append(opt);
+  });
+  if ([...$("voice").options].some(o => o.value === previous)) $("voice").value = previous;
+}
+function addLog(username, text) {
+  const box = $("log");
+  const empty = box.querySelector(".msg")?.textContent === "Los comentarios nuevos aparecerán aquí.";
+  if (empty) box.replaceChildren();
+  const row = document.createElement("div");
+  row.className = "msg";
+  const strong = document.createElement("strong");
+  strong.textContent = username || "Usuario";
+  const body = document.createElement("div");
+  body.textContent = text;
+  row.append(strong, body);
+  box.prepend(row);
+  while (box.children.length > 35) box.lastElementChild.remove();
+}
+function speakComment(item) {
+  if (!audioUnlocked || !("speechSynthesis" in window)) return;
+  if (!isHumanComment(item)) return;
+  const username = sanitizeForSpeech(item.username || "").replace(/^\s*@+/, "").trim();
+  const comment = sanitizeForSpeech(item.text ?? item.message ?? "");
+  if (!comment) return;
+  const text = $("readNames").checked && username ? `${username} dice ${comment}` : comment;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "es-ES";
+  utterance.rate = Number($("speed").value) || 1;
+  utterance.volume = Number($("volume").value);
+  const chosen = voices.find(v => v.name === $("voice").value);
+  if (chosen) utterance.voice = chosen;
+  queue.push(utterance);
+  runQueue();
+  addLog(username, comment);
+}
+function runQueue() {
+  if (speaking || !queue.length || !audioUnlocked || !window.speechSynthesis) return;
+  speaking = true;
+  const utterance = queue.shift();
+  utterance.onend = utterance.onerror = () => { speaking = false; runQueue(); };
+  try { window.speechSynthesis.speak(utterance); }
+  catch { speaking = false; runQueue(); }
+}
+async function activateAudio() {
+  audioUnlocked = true;
+  if (window.speechSynthesis) {
+    try {
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0;
+      u.lang = "es-ES";
+      window.speechSynthesis.speak(u);
+    } catch {}
+  }
+  if ($("keepAlive").checked) startKeepAlive();
+  setStatus(connected ? "Audio activado · esperando comentarios nuevos." : "Audio activado · conecta con Valentina.", connected ? "good" : "");
+}
+function startKeepAlive() {
+  try {
+    if (!keepAliveContext) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { setStatus("Este navegador no permite el modo de audio continuo.", "bad"); return; }
+      keepAliveContext = new AC();
+      keepAliveOsc = keepAliveContext.createOscillator();
+      keepAliveGain = keepAliveContext.createGain();
+      keepAliveOsc.type = "sine";
+      keepAliveOsc.frequency.value = 110;
+      keepAliveGain.gain.value = 0.0005;
+      keepAliveOsc.connect(keepAliveGain);
+      keepAliveGain.connect(keepAliveContext.destination);
+      keepAliveOsc.start();
+    }
+    keepAliveContext.resume().catch(()=>{});
+  } catch { setStatus("No se pudo activar el audio continuo. Pulsa Activar audio otra vez.", "bad"); }
+}
+function stopKeepAlive() {
+  try { keepAliveOsc?.stop(); } catch {}
+  try { keepAliveContext?.close(); } catch {}
+  keepAliveContext = keepAliveOsc = keepAliveGain = null;
+}
+async function connect() {
+  if (connected) return;
+  $("connect").disabled = true;
+  setStatus("Conectando con Firebase…");
+  try {
+    await signInAnonymously(auth);
+    const messagesRef = query(ref(db, `rooms/${room}/messages`), limitToLast(50));
+    firstSnapshot = true;
+    seenIds = new Set();
+    unsubscribe = onValue(messagesRef, snap => {
+      const data = snap.val() || {};
+      const entries = Object.entries(data).sort((a,b) => (a[1]?.createdAt || 0) - (b[1]?.createdAt || 0));
+      if (firstSnapshot) {
+        entries.forEach(([id]) => seenIds.add(id));
+        firstSnapshot = false;
+        connected = true;
+        setStatus("Conectada con Valentina · esperando comentarios nuevos.", "good");
+        return;
+      }
+      for (const [id, item] of entries) {
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+        speakComment(item);
+      }
+      if (seenIds.size > 400) seenIds = new Set(entries.map(([id])=>id));
+    }, error => setStatus(`Error de Firebase: ${error.message}`, "bad"));
+  } catch (error) {
+    setStatus(`No se pudo conectar: ${error.message}`, "bad");
+  } finally {
+    $("connect").disabled = false;
+  }
+}
+function disconnect() {
+  if (unsubscribe) unsubscribe();
+  unsubscribe = null;
+  connected = false;
+  queue = [];
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  speaking = false;
+  setStatus("Conexión detenida.", "");
+}
+$("connect").addEventListener("click", connect);
+$("stop").addEventListener("click", disconnect);
+$("unlock").addEventListener("click", activateAudio);
+$("test").addEventListener("click", async () => {
+  if (!audioUnlocked) await activateAudio();
+  queue.push(new SpeechSynthesisUtterance("Hola, esta es la prueba de voz de Valentina."));
+  runQueue();
+});
+$("clear").addEventListener("click", () => $("log").replaceChildren());
+$("keepAlive").addEventListener("change", () => {
+  if ($("keepAlive").checked) {
+    if (!audioUnlocked) setStatus("Pulsa Activar audio y luego activa el sonido de fondo.", "");
+    else startKeepAlive();
+  } else stopKeepAlive();
+});
+$("speed").addEventListener("input", () => $("speedVal").textContent = `${Number($("speed").value).toFixed(2).replace(/0$/,"")}×`);
+$("volume").addEventListener("input", () => $("volumeVal").textContent = `${Math.round(Number($("volume").value)*100)}%`);
+if (window.speechSynthesis) {
+  refreshVoices();
+  window.speechSynthesis.onvoiceschanged = refreshVoices;
+}
+window.addEventListener("pagehide", () => { if (unsubscribe) unsubscribe(); stopKeepAlive(); });
+</script>
+</body>
+</html>
