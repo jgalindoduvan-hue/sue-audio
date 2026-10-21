@@ -108,6 +108,8 @@ let audioUnlocked = false;
 let voices = [];
 const keepAliveAudio = $("keepAliveAudio");
 let keepAliveStarted = false;
+let keepAliveWatchdog = null;
+let keepAliveRetryAt = 0;
 let queue = [];
 let speaking = false;
 let seenIds = new Set();
@@ -207,7 +209,8 @@ async function startKeepAlive() {
     await keepAliveAudio.play();
     keepAliveStarted = true;
     $("keepAlive").checked = true;
-    $("keepAliveStatus").textContent = "Pista multimedia en reproducción continua.";
+    $("keepAliveStatus").textContent = "Audio continuo activo · comprobando reproducción.";
+    startKeepAliveWatchdog();
   } catch (err) {
     keepAliveStarted = false;
     $("keepAliveStatus").textContent = "No se pudo iniciar. Pulsa «Iniciar audio continuo» otra vez y confirma que keepalive.wav esté junto a index.html.";
@@ -220,7 +223,26 @@ function stopKeepAlive() {
     if (keepAliveAudio) keepAliveAudio.currentTime = 0;
   } catch {}
   keepAliveStarted = false;
+  if (keepAliveWatchdog) clearInterval(keepAliveWatchdog);
+  keepAliveWatchdog = null;
   if ($("keepAliveStatus")) $("keepAliveStatus").textContent = "Pista detenida.";
+}
+function startKeepAliveWatchdog() {
+  if (keepAliveWatchdog) clearInterval(keepAliveWatchdog);
+  keepAliveWatchdog = setInterval(async () => {
+    if (!$("keepAlive").checked || !keepAliveAudio) return;
+    if (!keepAliveAudio.paused && !keepAliveAudio.ended) return;
+    const now = Date.now();
+    if (now - keepAliveRetryAt < 10000) return;
+    keepAliveRetryAt = now;
+    try {
+      await keepAliveAudio.play();
+      keepAliveStarted = true;
+      $("keepAliveStatus").textContent = "Audio continuo reanudado.";
+    } catch (err) {
+      $("keepAliveStatus").textContent = "El sistema pausó el audio; si no vuelve solo, pulsa Iniciar audio continuo.";
+    }
+  }, 5000);
 }
 async function connect() {
   if (connected) return;
@@ -290,15 +312,18 @@ $("stopKeepAlive").addEventListener("click", () => {
 });
 keepAliveAudio?.addEventListener("playing", () => {
   keepAliveStarted = true;
-  $("keepAliveStatus").textContent = "Pista multimedia en reproducción continua.";
+  $("keepAliveStatus").textContent = "Audio continuo activo · comprobando reproducción.";
+  startKeepAliveWatchdog();
 });
 keepAliveAudio?.addEventListener("pause", () => {
   if (keepAliveStarted) $("keepAliveStatus").textContent = "La pista se pausó. Pulsa Iniciar audio continuo para reactivarla.";
 });
 document.addEventListener("visibilitychange", async () => {
-  // Best-effort only: iOS may reject resume when a page is backgrounded.
+  // Best effort: iOS/ProTube may suspend the page or reject background playback.
   if (!document.hidden && $("keepAlive").checked && keepAliveAudio?.paused) {
-    try { await keepAliveAudio.play(); } catch {}
+    try { await keepAliveAudio.play(); } catch {
+      $("keepAliveStatus").textContent = "Audio pausado por el sistema; pulsa Iniciar audio continuo.";
+    }
   }
 });
 $("speed").addEventListener("input", () => $("speedVal").textContent = `${Number($("speed").value).toFixed(2).replace(/0$/,"")}×`);
@@ -311,4 +336,3 @@ window.addEventListener("pagehide", () => { if (unsubscribe) unsubscribe(); });
 </script>
 </body>
 </html>
-
