@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#100b19">
-<title>Valentina · Audio del chat</title>
+<title>Valentina · Audio del chat v2</title>
 <style>
 :root{color-scheme:dark;--bg:#100b19;--panel:#1b1226;--line:#513166;--pink:#ff36cf;--purple:#a855f7;--text:#f8efff;--muted:#c4b3d2;--good:#6ee7a8;--bad:#ff8b9d}
 *{box-sizing:border-box}
@@ -67,15 +67,21 @@ footer{color:var(--muted);font-size:.82rem;padding:0 3px 20px}
   </div>
 </section>
 <section class="card">
-  <h2 style="margin:0 0 8px">Audio en segundo plano</h2>
-  <label class="check"><input id="keepAlive" type="checkbox"> Mantener un sonido casi inaudible activo</label>
-  <p class="note">Al activarlo, se genera un tono muy débil después de pulsar «Activar audio». Sirve para evitar que algunas páginas consideren que el audio está inactivo, pero no puede impedir todos los bloqueos de iOS/Safari. Si lo escuchas claramente, desactívalo.</p>
+  <h2 style="margin:0 0 8px">Audio continuo para ProTube</h2>
+  <label class="check"><input id="keepAlive" type="checkbox"> Reproducir pista de mantenimiento en bucle</label>
+  <div class="buttons" style="margin-top:10px">
+    <button id="startKeepAlive" class="primary">Iniciar audio continuo</button>
+    <button id="stopKeepAlive">Detener audio continuo</button>
+  </div>
+  <p id="keepAliveStatus" class="note" style="margin-top:10px">Pista detenida.</p>
+  <p class="note">Esta versión reproduce un archivo WAV real en bucle, no un oscilador Web Audio. El sonido tiene una señal muy débil para intentar mantener activa la reproducción multimedia. Con auriculares o un volumen alto podrías notar un tono bajo; si ocurre, baja el volumen del dispositivo. iOS o ProTube aún pueden suspenderlo según sus propias reglas.</p>
 </section>
+<audio id="keepAliveAudio" src="./keepalive.wav" preload="auto" loop playsinline></audio>
 <section class="card">
   <h2 style="margin:0 0 10px">Comentarios recientes</h2>
   <div id="log"><div class="msg">Los comentarios nuevos aparecerán aquí.</div></div>
 </section>
-<footer>Valentina Chat Audio · Solo escucha rooms/main/messages con type="chat". No incluye música, cola, regalos ni módulos de Sue.</footer>
+<footer>Valentina Chat Audio v2 · Solo escucha rooms/main/messages con type="chat". No incluye música, cola, regalos ni módulos de Sue.</footer>
 </main>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
@@ -100,9 +106,8 @@ let unsubscribe = null;
 let connected = false;
 let audioUnlocked = false;
 let voices = [];
-let keepAliveContext = null;
-let keepAliveOsc = null;
-let keepAliveGain = null;
+const keepAliveAudio = $("keepAliveAudio");
+let keepAliveStarted = false;
 let queue = [];
 let speaking = false;
 let seenIds = new Set();
@@ -190,31 +195,32 @@ async function activateAudio() {
       window.speechSynthesis.speak(u);
     } catch {}
   }
-  if ($("keepAlive").checked) startKeepAlive();
   setStatus(connected ? "Audio activado · esperando comentarios nuevos." : "Audio activado · conecta con Valentina.", connected ? "good" : "");
+  if ($("keepAlive").checked) await startKeepAlive();
 }
-function startKeepAlive() {
+async function startKeepAlive() {
   try {
-    if (!keepAliveContext) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) { setStatus("Este navegador no permite el modo de audio continuo.", "bad"); return; }
-      keepAliveContext = new AC();
-      keepAliveOsc = keepAliveContext.createOscillator();
-      keepAliveGain = keepAliveContext.createGain();
-      keepAliveOsc.type = "sine";
-      keepAliveOsc.frequency.value = 110;
-      keepAliveGain.gain.value = 0.0005;
-      keepAliveOsc.connect(keepAliveGain);
-      keepAliveGain.connect(keepAliveContext.destination);
-      keepAliveOsc.start();
-    }
-    keepAliveContext.resume().catch(()=>{});
-  } catch { setStatus("No se pudo activar el audio continuo. Pulsa Activar audio otra vez.", "bad"); }
+    if (!keepAliveAudio) throw new Error("No se encontró el archivo de audio.");
+    keepAliveAudio.loop = true;
+    keepAliveAudio.volume = 1;
+    // play() is called directly from a user click to satisfy iOS media gesture requirements.
+    await keepAliveAudio.play();
+    keepAliveStarted = true;
+    $("keepAlive").checked = true;
+    $("keepAliveStatus").textContent = "Pista multimedia en reproducción continua.";
+  } catch (err) {
+    keepAliveStarted = false;
+    $("keepAliveStatus").textContent = "No se pudo iniciar. Pulsa «Iniciar audio continuo» otra vez y confirma que keepalive.wav esté junto a index.html.";
+    console.warn("Keepalive playback failed:", err);
+  }
 }
 function stopKeepAlive() {
-  try { keepAliveOsc?.stop(); } catch {}
-  try { keepAliveContext?.close(); } catch {}
-  keepAliveContext = keepAliveOsc = keepAliveGain = null;
+  try {
+    keepAliveAudio?.pause();
+    if (keepAliveAudio) keepAliveAudio.currentTime = 0;
+  } catch {}
+  keepAliveStarted = false;
+  if ($("keepAliveStatus")) $("keepAliveStatus").textContent = "Pista detenida.";
 }
 async function connect() {
   if (connected) return;
@@ -266,11 +272,34 @@ $("test").addEventListener("click", async () => {
   runQueue();
 });
 $("clear").addEventListener("click", () => $("log").replaceChildren());
-$("keepAlive").addEventListener("change", () => {
+$("keepAlive").addEventListener("change", async () => {
   if ($("keepAlive").checked) {
-    if (!audioUnlocked) setStatus("Pulsa Activar audio y luego activa el sonido de fondo.", "");
-    else startKeepAlive();
+    if (!audioUnlocked) {
+      setStatus("Pulsa Activar audio y después Iniciar audio continuo.", "");
+      $("keepAliveStatus").textContent = "Necesita una interacción del usuario para arrancar en iPhone.";
+    } else await startKeepAlive();
   } else stopKeepAlive();
+});
+$("startKeepAlive").addEventListener("click", async () => {
+  audioUnlocked = true;
+  await startKeepAlive();
+});
+$("stopKeepAlive").addEventListener("click", () => {
+  $("keepAlive").checked = false;
+  stopKeepAlive();
+});
+keepAliveAudio?.addEventListener("playing", () => {
+  keepAliveStarted = true;
+  $("keepAliveStatus").textContent = "Pista multimedia en reproducción continua.";
+});
+keepAliveAudio?.addEventListener("pause", () => {
+  if (keepAliveStarted) $("keepAliveStatus").textContent = "La pista se pausó. Pulsa Iniciar audio continuo para reactivarla.";
+});
+document.addEventListener("visibilitychange", async () => {
+  // Best-effort only: iOS may reject resume when a page is backgrounded.
+  if (!document.hidden && $("keepAlive").checked && keepAliveAudio?.paused) {
+    try { await keepAliveAudio.play(); } catch {}
+  }
 });
 $("speed").addEventListener("input", () => $("speedVal").textContent = `${Number($("speed").value).toFixed(2).replace(/0$/,"")}×`);
 $("volume").addEventListener("input", () => $("volumeVal").textContent = `${Math.round(Number($("volume").value)*100)}%`);
@@ -278,7 +307,8 @@ if (window.speechSynthesis) {
   refreshVoices();
   window.speechSynthesis.onvoiceschanged = refreshVoices;
 }
-window.addEventListener("pagehide", () => { if (unsubscribe) unsubscribe(); stopKeepAlive(); });
+window.addEventListener("pagehide", () => { if (unsubscribe) unsubscribe(); });
 </script>
 </body>
 </html>
+
