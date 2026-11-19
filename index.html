@@ -5,27 +5,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#100b19">
-<title>Valentina · Audio del chat v2</title>
+<title>Valentina · Audio del chat</title>
 <style>
 :root{color-scheme:dark;--bg:#100b19;--panel:#1b1226;--line:#513166;--pink:#ff36cf;--purple:#a855f7;--text:#f8efff;--muted:#c4b3d2;--good:#6ee7a8;--bad:#ff8b9d}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;background:radial-gradient(ellipse at top,#28123a 0%,var(--bg) 62%);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:20px}
-main{width:min(720px,100%);margin:0 auto}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at top,#28123a 0%,var(--bg) 62%);color:var(--text);font:16px/1.45 system-ui,sans-serif;padding:20px}
+main{width:min(720px,100%);margin:auto}
 header{padding:12px 2px 18px}
-h1{font-size:clamp(1.5rem,5vw,2.2rem);margin:0 0 5px;letter-spacing:.02em}
+h1{font-size:clamp(1.5rem,5vw,2.2rem);margin:0 0 5px}
 header p,.hint{color:var(--muted);margin:0}
-.card{background:rgba(27,18,38,.94);border:1px solid var(--line);border-radius:18px;padding:18px;margin:0 0 14px;box-shadow:0 8px 32px #0003}
-.status{display:flex;align-items:center;gap:10px;margin-bottom:12px;color:var(--muted);font-size:.95rem}
-.dot{width:10px;height:10px;border-radius:50%;background:#9b8aa7;flex:0 0 auto}.dot.good{background:var(--good);box-shadow:0 0 12px #6ee7a866}.dot.bad{background:var(--bad)}
-button,select,input[type=range]{accent-color:var(--pink)}
-button,select{font:inherit}
-button{border:1px solid #70418b;border-radius:12px;padding:12px 14px;background:#30163e;color:white;cursor:pointer;min-height:44px}
+.card{background:rgba(27,18,38,.94);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}
+.status{display:flex;align-items:center;gap:10px;margin-bottom:12px;color:var(--muted)}
+.dot{width:10px;height:10px;border-radius:50%;background:#9b8aa7}
+.dot.good{background:var(--good);box-shadow:0 0 12px #6ee7a866}
+.dot.bad{background:var(--bad)}
+button,input[type=range]{accent-color:var(--pink)}
+button{font:inherit;border:1px solid #70418b;border-radius:12px;padding:12px 14px;background:#30163e;color:white;cursor:pointer;min-height:44px}
 button.primary{background:linear-gradient(100deg,#ff24c8,#8c35e8);border:0;font-weight:700}
-button:disabled{opacity:.55;cursor:wait}
-button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--pink);outline-offset:3px}
+button:disabled{opacity:.55}
 .buttons{display:flex;gap:10px;flex-wrap:wrap}
 label{display:block;margin:12px 0 6px;font-weight:600}
-select{width:100%;background:#100b19;color:var(--text);border:1px solid #604176;border-radius:10px;padding:11px}
 input[type=range]{width:100%}
 .check{display:flex;align-items:center;gap:9px;font-weight:500;margin:10px 0}
 .check input{width:18px;height:18px}
@@ -33,7 +32,8 @@ input[type=range]{width:100%}
 .note{font-size:.9rem;color:var(--muted)}
 #log{display:flex;flex-direction:column;gap:8px;max-height:270px;overflow:auto}
 .msg{padding:10px 12px;background:#120c1b;border:1px solid #392249;border-radius:10px;overflow-wrap:anywhere}
-.msg strong{color:#ff8be2}.msg small{display:block;color:var(--muted);margin-top:3px}
+.msg strong{color:#ff8be2}
+.msg small{display:block;color:var(--muted);margin-top:3px}
 footer{color:var(--muted);font-size:.82rem;padding:0 3px 20px}
 @media(max-width:540px){body{padding:12px}.card{padding:14px}.grid{grid-template-columns:1fr}.buttons button{flex:1 1 100%}}
 </style>
@@ -41,51 +41,59 @@ footer{color:var(--muted);font-size:.82rem;padding:0 3px 20px}
 <body>
 <main>
 <header>
-  <h1>🎧 Valentina · Audio del chat</h1>
-  <p>Lee en voz alta únicamente los comentarios de la gente que llegan por el puente de Valentina.</p>
+<h1>🎧 Valentina · Audio del chat</h1>
+<p>Lee en voz alta únicamente los comentarios de la gente usando tu voz de Fish Audio.</p>
 </header>
+
 <section class="card">
-  <div class="status"><span id="dot" class="dot"></span><span id="status">Desconectada. Pulsa conectar para empezar.</span></div>
-  <div class="buttons">
-    <button id="connect" class="primary">Conectar con Valentina</button>
-    <button id="stop">Detener conexión</button>
-  </div>
-  <p class="note" style="margin-top:12px">Usa la misma base de datos y sala <b>main</b> que el puente de Valentina. Los regalos, eventos del sistema y mensajes antiguos no se leen.</p>
+<div class="status"><span id="dot" class="dot"></span><span id="status">Desconectada. Pulsa conectar para empezar.</span></div>
+<div class="buttons">
+<button id="connect" class="primary">Conectar con Valentina</button>
+<button id="stop">Detener conexión</button>
+</div>
+<p class="note" style="margin-top:12px">Los comentarios antiguos, regalos y eventos del sistema no se leen.</p>
 </section>
+
 <section class="card">
-  <h2 style="margin:0 0 8px">Voz</h2>
-  <label class="check"><input id="readNames" type="checkbox" checked> Leer el nombre del usuario</label>
-  <div style="padding:11px 12px;background:#120c1b;border:1px solid #604176;border-radius:10px;margin:8px 0 12px">
-    <b style="color:#ff8be2">Voz Juvenil Animada y Enérgica</b>
-    <div class="note">Voz clonada de Fish Audio · Valentina</div>
-  </div>
-  <div class="grid">
-    <div><label for="speed">Velocidad: <span id="speedVal">1.0×</span></label><input id="speed" type="range" min=".65" max="1.7" step=".05" value="1"></div>
-    <div><label for="volume">Volumen: <span id="volumeVal">100%</span></label><input id="volume" type="range" min="0" max="1" step=".05" value="1"></div>
-  </div>
-  <div class="buttons" style="margin-top:14px">
-    <button id="unlock" class="primary">Activar audio</button>
-    <button id="test">Probar voz</button>
-    <button id="clear">Limpiar lista</button>
-  </div>
+<h2 style="margin:0 0 8px">Voz de Valentina · Fish Audio</h2>
+<label class="check"><input id="readNames" type="checkbox" checked> Leer el nombre del usuario</label>
+<div class="grid">
+<div>
+<label for="speed">Velocidad: <span id="speedVal">1×</span></label>
+<input id="speed" type="range" min=".65" max="1.7" step=".05" value="1">
+</div>
+<div>
+<label for="volume">Volumen: <span id="volumeVal">100%</span></label>
+<input id="volume" type="range" min="0" max="1" step=".05" value="1">
+</div>
+</div>
+<div class="buttons" style="margin-top:14px">
+<button id="test" class="primary">Probar voz</button>
+<button id="clear">Limpiar lista</button>
+</div>
+<p class="note" id="voiceStatus">Voz configurada: Voz Juvenil Animada y Enérgica.</p>
 </section>
+
 <section class="card">
-  <h2 style="margin:0 0 8px">Audio continuo para ProTube</h2>
-  <label class="check"><input id="keepAlive" type="checkbox"> Reproducir pista de mantenimiento en bucle</label>
-  <div class="buttons" style="margin-top:10px">
-    <button id="startKeepAlive" class="primary">Iniciar audio continuo</button>
-    <button id="stopKeepAlive">Detener audio continuo</button>
-  </div>
-  <p id="keepAliveStatus" class="note" style="margin-top:10px">Pista detenida.</p>
-  <p class="note">Esta versión reproduce un archivo WAV real en bucle, no un oscilador Web Audio. El sonido tiene una señal muy débil para intentar mantener activa la reproducción multimedia. Con auriculares o un volumen alto podrías notar un tono bajo; si ocurre, baja el volumen del dispositivo. iOS o ProTube aún pueden suspenderlo según sus propias reglas.</p>
+<h2 style="margin:0 0 8px">Audio continuo para ProTube</h2>
+<label class="check"><input id="keepAlive" type="checkbox"> Reproducir pista de mantenimiento en bucle</label>
+<div class="buttons" style="margin-top:10px">
+<button id="startKeepAlive" class="primary">Iniciar audio continuo</button>
+<button id="stopKeepAlive">Detener audio continuo</button>
+</div>
+<p id="keepAliveStatus" class="note" style="margin-top:10px">Pista detenida.</p>
+<p class="note">Esta pista intenta mantener activa la reproducción multimedia. iOS o ProTube aún pueden suspenderla según sus propias reglas.</p>
 </section>
+
 <audio id="keepAliveAudio" src="./keepalive.wav" preload="auto" loop playsinline></audio>
+
 <section class="card">
-  <h2 style="margin:0 0 10px">Comentarios recientes</h2>
-  <div id="log"><div class="msg">Los comentarios nuevos aparecerán aquí.</div></div>
+<h2 style="margin:0 0 10px">Comentarios recientes</h2>
+<div id="log"><div class="msg">Los comentarios nuevos aparecerán aquí.</div></div>
 </section>
-<footer>Valentina Chat Audio · Voz Fish Audio · Solo escucha rooms/main/messages con type="chat". No incluye música, cola, regalos ni módulos de Sue.</footer>
+<footer>Valentina Chat Audio · Fish Audio · Firebase rooms/main/messages</footer>
 </main>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
@@ -100,30 +108,34 @@ const firebaseConfig = {
   messagingSenderId: "802700860379",
   appId: "1:802700860379:web:b7f114b77101f9d4e725fe"
 };
+
+// La voz y la API Key están configuradas de forma segura en el Worker.
+const FISH_WORKER_URL = "https://long-violet-52e4valentina-sue.jgalindoduvan.workers.dev/";
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 const room = "main";
 const $ = id => document.getElementById(id);
+
 let unsubscribe = null;
 let connected = false;
 let audioUnlocked = false;
-const keepAliveAudio = $("keepAliveAudio");
-let keepAliveStarted = false;
-let keepAliveWatchdog = null;
-let keepAliveRetryAt = 0;
 let queue = [];
 let speaking = false;
-let currentAudio = null;
-let currentAudioUrl = null;
-const FISH_WORKER_URL = "https://long-violet-52e4valentina-sue.jgalindoduvan.workers.dev/";
 let seenIds = new Set();
 let firstSnapshot = true;
+let currentAudio = null;
+let currentAudioUrl = null;
+let keepAliveWatchdog = null;
+let keepAliveRetryAt = 0;
+const keepAliveAudio = $("keepAliveAudio");
 
 function setStatus(text, kind="") {
   $("status").textContent = text;
   $("dot").className = "dot" + (kind ? " " + kind : "");
 }
+
 function sanitizeForSpeech(value) {
   return String(value ?? "")
     .normalize("NFKC")
@@ -134,19 +146,21 @@ function sanitizeForSpeech(value) {
     .replace(/\s+/g, " ")
     .trim();
 }
+
 function isHumanComment(item) {
   if (!item || item.type !== "chat") return false;
   const raw = String(item.text ?? item.message ?? "").trim();
   if (!raw) return false;
   if (/^(?:\/|!)(?:play|skip)\b/i.test(raw)) return false;
   if (/ha empezado a seguir|empez[oó] a seguir|started following|joined the live|se ha unido|entr[oó] al live|ha compartido el live|comparti[oó] el live|shared the live|ha enviado|envi[oó] un regalo|sent a gift|gifted|regalo de|ha dado me gusta|liked the live/i.test(raw)) return false;
-  const msg = sanitizeForSpeech(raw);
-  return Boolean(msg);
+  return Boolean(sanitizeForSpeech(raw));
 }
+
 function addLog(username, text) {
   const box = $("log");
-  const empty = box.querySelector(".msg")?.textContent === "Los comentarios nuevos aparecerán aquí.";
-  if (empty) box.replaceChildren();
+  if (box.querySelector(".msg")?.textContent === "Los comentarios nuevos aparecerán aquí.") {
+    box.replaceChildren();
+  }
   const row = document.createElement("div");
   row.className = "msg";
   const strong = document.createElement("strong");
@@ -157,120 +171,118 @@ function addLog(username, text) {
   box.prepend(row);
   while (box.children.length > 35) box.lastElementChild.remove();
 }
-function speakComment(item) {
-  if (!audioUnlocked || !isHumanComment(item)) return;
-  const username = sanitizeForSpeech(item.username || "").replace(/^\s*@+/, "").trim();
-  const comment = sanitizeForSpeech(item.text ?? item.message ?? "");
-  if (!comment) return;
-  const text = $("readNames").checked && username ? `${username} dice ${comment}` : comment;
-  queue.push({ text, username, comment });
-  runQueue();
-  addLog(username, comment);
-}
+
 async function generateSpeech(text) {
   const response = await fetch(FISH_WORKER_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text })
   });
+
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Fish Audio (${response.status}): ${detail || response.statusText}`);
+    throw new Error(`Fish Audio / Worker (${response.status}): ${detail.slice(0,300)}`);
   }
+
   return await response.blob();
 }
+
 async function playText(text) {
   const blob = await generateSpeech(text);
-  currentAudioUrl = URL.createObjectURL(blob);
-  currentAudio = new Audio(currentAudioUrl);
-  currentAudio.volume = Number($("volume").value);
-  currentAudio.playbackRate = Number($("speed").value) || 1;
+  const url = URL.createObjectURL(blob);
+  currentAudioUrl = url;
+
+  const audio = new Audio(url);
+  currentAudio = audio;
+  audio.volume = Number($("volume").value);
+  audio.playbackRate = Number($("speed").value) || 1;
+
+  await audio.play();
+
   await new Promise((resolve, reject) => {
-    currentAudio.addEventListener("ended", resolve, { once: true });
-    currentAudio.addEventListener("error", () => reject(new Error("No se pudo reproducir el audio recibido de Fish Audio.")), { once: true });
-    currentAudio.play().catch(reject);
+    audio.onended = resolve;
+    audio.onerror = () => reject(new Error("No se pudo reproducir el audio generado."));
   });
-  currentAudio = null;
-  if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
-  currentAudioUrl = null;
+
+  URL.revokeObjectURL(url);
+  if (currentAudioUrl === url) {
+    currentAudioUrl = null;
+    currentAudio = null;
+  }
 }
+
+function stopCurrentAudio() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = "";
+    currentAudio = null;
+  }
+  if (currentAudioUrl) {
+    URL.revokeObjectURL(currentAudioUrl);
+    currentAudioUrl = null;
+  }
+}
+
 async function runQueue() {
   if (speaking || !queue.length || !audioUnlocked) return;
   speaking = true;
+
   while (queue.length && audioUnlocked) {
-    const item = queue.shift();
+    const text = queue.shift();
     try {
-      setStatus("Generando voz de Valentina…", "good");
-      await playText(item.text);
-      if (connected) setStatus("Conectada con Valentina · esperando comentarios nuevos.", "good");
+      await playText(text);
     } catch (error) {
-      console.error("Fish Audio:", error);
-      setStatus(`Error de voz: ${error.message}`, "bad");
+      console.error(error);
+      $("voiceStatus").textContent = error.message;
     }
   }
+
   speaking = false;
 }
+
+function speakComment(item) {
+  if (!isHumanComment(item)) return;
+
+  const username = sanitizeForSpeech(item.username || "").replace(/^\s*@+/, "").trim();
+  const comment = sanitizeForSpeech(item.text ?? item.message ?? "");
+  if (!comment) return;
+
+  const text = $("readNames").checked && username
+    ? `${username} dice ${comment}`
+    : comment;
+
+  queue.push(text);
+  addLog(username, comment);
+  runQueue();
+}
+
 async function activateAudio() {
   audioUnlocked = true;
-  setStatus(connected ? "Audio activado · esperando comentarios nuevos." : "Audio activado · conecta con Valentina.", connected ? "good" : "");
-  if ($("keepAlive").checked) await startKeepAlive();
+  setStatus(connected
+    ? "Audio activado · esperando comentarios nuevos."
+    : "Audio activado · conecta con Valentina.",
+    connected ? "good" : "");
 }
-async function startKeepAlive() {
-  try {
-    if (!keepAliveAudio) throw new Error("No se encontró el archivo de audio.");
-    keepAliveAudio.loop = true;
-    keepAliveAudio.volume = 1;
-    // play() is called directly from a user click to satisfy iOS media gesture requirements.
-    await keepAliveAudio.play();
-    keepAliveStarted = true;
-    $("keepAlive").checked = true;
-    $("keepAliveStatus").textContent = "Audio continuo activo · comprobando reproducción.";
-    startKeepAliveWatchdog();
-  } catch (err) {
-    keepAliveStarted = false;
-    $("keepAliveStatus").textContent = "No se pudo iniciar. Pulsa «Iniciar audio continuo» otra vez y confirma que keepalive.wav esté junto a index.html.";
-    console.warn("Keepalive playback failed:", err);
-  }
-}
-function stopKeepAlive() {
-  try {
-    keepAliveAudio?.pause();
-    if (keepAliveAudio) keepAliveAudio.currentTime = 0;
-  } catch {}
-  keepAliveStarted = false;
-  if (keepAliveWatchdog) clearInterval(keepAliveWatchdog);
-  keepAliveWatchdog = null;
-  if ($("keepAliveStatus")) $("keepAliveStatus").textContent = "Pista detenida.";
-}
-function startKeepAliveWatchdog() {
-  if (keepAliveWatchdog) clearInterval(keepAliveWatchdog);
-  keepAliveWatchdog = setInterval(async () => {
-    if (!$("keepAlive").checked || !keepAliveAudio) return;
-    if (!keepAliveAudio.paused && !keepAliveAudio.ended) return;
-    const now = Date.now();
-    if (now - keepAliveRetryAt < 10000) return;
-    keepAliveRetryAt = now;
-    try {
-      await keepAliveAudio.play();
-      keepAliveStarted = true;
-      $("keepAliveStatus").textContent = "Audio continuo reanudado.";
-    } catch (err) {
-      $("keepAliveStatus").textContent = "El sistema pausó el audio; si no vuelve solo, pulsa Iniciar audio continuo.";
-    }
-  }, 5000);
-}
+
 async function connect() {
   if (connected) return;
+
   $("connect").disabled = true;
   setStatus("Conectando con Firebase…");
+
   try {
     await signInAnonymously(auth);
     const messagesRef = query(ref(db, `rooms/${room}/messages`), limitToLast(50));
+
     firstSnapshot = true;
     seenIds = new Set();
+
     unsubscribe = onValue(messagesRef, snap => {
       const data = snap.val() || {};
-      const entries = Object.entries(data).sort((a,b) => (a[1]?.createdAt || 0) - (b[1]?.createdAt || 0));
+      const entries = Object.entries(data).sort(
+        (a,b) => (a[1]?.createdAt || 0) - (b[1]?.createdAt || 0)
+      );
+
       if (firstSnapshot) {
         entries.forEach(([id]) => seenIds.add(id));
         firstSnapshot = false;
@@ -278,79 +290,119 @@ async function connect() {
         setStatus("Conectada con Valentina · esperando comentarios nuevos.", "good");
         return;
       }
+
       for (const [id, item] of entries) {
         if (seenIds.has(id)) continue;
         seenIds.add(id);
         speakComment(item);
       }
-      if (seenIds.size > 400) seenIds = new Set(entries.map(([id])=>id));
+
+      if (seenIds.size > 400) {
+        seenIds = new Set(entries.map(([id]) => id));
+      }
     }, error => setStatus(`Error de Firebase: ${error.message}`, "bad"));
+
   } catch (error) {
     setStatus(`No se pudo conectar: ${error.message}`, "bad");
   } finally {
     $("connect").disabled = false;
   }
 }
+
 function disconnect() {
   if (unsubscribe) unsubscribe();
   unsubscribe = null;
   connected = false;
   queue = [];
-  if (currentAudio) { currentAudio.pause(); currentAudio.src = ""; currentAudio = null; }
-  if (currentAudioUrl) { URL.revokeObjectURL(currentAudioUrl); currentAudioUrl = null; }
+  stopCurrentAudio();
   speaking = false;
-  setStatus("Conexión detenida.", "");
+  setStatus("Conexión detenida.");
 }
+
+async function startKeepAlive() {
+  try {
+    keepAliveAudio.loop = true;
+    keepAliveAudio.volume = 1;
+    await keepAliveAudio.play();
+    $("keepAlive").checked = true;
+    $("keepAliveStatus").textContent = "Audio continuo activo.";
+    startKeepAliveWatchdog();
+  } catch (error) {
+    $("keepAliveStatus").textContent = "No se pudo iniciar. Comprueba que keepalive.wav esté junto a index.html.";
+    console.warn(error);
+  }
+}
+
+function stopKeepAlive() {
+  keepAliveAudio.pause();
+  keepAliveAudio.currentTime = 0;
+  if (keepAliveWatchdog) clearInterval(keepAliveWatchdog);
+  keepAliveWatchdog = null;
+  $("keepAliveStatus").textContent = "Pista detenida.";
+}
+
+function startKeepAliveWatchdog() {
+  if (keepAliveWatchdog) clearInterval(keepAliveWatchdog);
+  keepAliveWatchdog = setInterval(async () => {
+    if (!$("keepAlive").checked || !keepAliveAudio) return;
+    if (!keepAliveAudio.paused && !keepAliveAudio.ended) return;
+    if (Date.now() - keepAliveRetryAt < 10000) return;
+    keepAliveRetryAt = Date.now();
+    try {
+      await keepAliveAudio.play();
+      $("keepAliveStatus").textContent = "Audio continuo reanudado.";
+    } catch {
+      $("keepAliveStatus").textContent = "El sistema pausó el audio. Pulsa Iniciar audio continuo.";
+    }
+  }, 5000);
+}
+
 $("connect").addEventListener("click", connect);
 $("stop").addEventListener("click", disconnect);
-$("unlock").addEventListener("click", activateAudio);
 $("test").addEventListener("click", async () => {
-  if (!audioUnlocked) await activateAudio();
-  queue.push({ text: "Hola, esta es la prueba de voz de Valentina.", username: "Valentina", comment: "Prueba de voz" });
+  await activateAudio();
+  queue.push("Hola, esta es la prueba de voz de Valentina.");
   runQueue();
 });
 $("clear").addEventListener("click", () => $("log").replaceChildren());
-$("keepAlive").addEventListener("change", async () => {
-  if ($("keepAlive").checked) {
-    if (!audioUnlocked) {
-      setStatus("Pulsa Activar audio y después Iniciar audio continuo.", "");
-      $("keepAliveStatus").textContent = "Necesita una interacción del usuario para arrancar en iPhone.";
-    } else await startKeepAlive();
-  } else stopKeepAlive();
-});
-$("startKeepAlive").addEventListener("click", async () => {
-  audioUnlocked = true;
-  await startKeepAlive();
-});
-$("stopKeepAlive").addEventListener("click", () => {
-  $("keepAlive").checked = false;
-  stopKeepAlive();
-});
-keepAliveAudio?.addEventListener("playing", () => {
-  keepAliveStarted = true;
-  $("keepAliveStatus").textContent = "Audio continuo activo · comprobando reproducción.";
-  startKeepAliveWatchdog();
-});
-keepAliveAudio?.addEventListener("pause", () => {
-  if (keepAliveStarted) $("keepAliveStatus").textContent = "La pista se pausó. Pulsa Iniciar audio continuo para reactivarla.";
-});
-document.addEventListener("visibilitychange", async () => {
-  // Best effort: iOS/ProTube may suspend the page or reject background playback.
-  if (!document.hidden && $("keepAlive").checked && keepAliveAudio?.paused) {
-    try { await keepAliveAudio.play(); } catch {
-      $("keepAliveStatus").textContent = "Audio pausado por el sistema; pulsa Iniciar audio continuo.";
-    }
-  }
-});
+
 $("speed").addEventListener("input", () => {
   $("speedVal").textContent = `${Number($("speed").value).toFixed(2).replace(/0$/,"")}×`;
   if (currentAudio) currentAudio.playbackRate = Number($("speed").value);
 });
+
 $("volume").addEventListener("input", () => {
   $("volumeVal").textContent = `${Math.round(Number($("volume").value)*100)}%`;
   if (currentAudio) currentAudio.volume = Number($("volume").value);
 });
-window.addEventListener("pagehide", () => { if (unsubscribe) unsubscribe(); });
+
+$("keepAlive").addEventListener("change", async () => {
+  if ($("keepAlive").checked) await startKeepAlive();
+  else stopKeepAlive();
+});
+
+$("startKeepAlive").addEventListener("click", startKeepAlive);
+$("stopKeepAlive").addEventListener("click", () => {
+  $("keepAlive").checked = false;
+  stopKeepAlive();
+});
+
+$("keepAliveAudio").addEventListener("playing", () => {
+  $("keepAliveStatus").textContent = "Audio continuo activo.";
+  startKeepAliveWatchdog();
+});
+
+document.addEventListener("visibilitychange", async () => {
+  if (!document.hidden && $("keepAlive").checked && keepAliveAudio.paused) {
+    try { await keepAliveAudio.play(); }
+    catch { $("keepAliveStatus").textContent = "Audio pausado por el sistema."; }
+  }
+});
+
+window.addEventListener("pagehide", () => {
+  if (unsubscribe) unsubscribe();
+  stopCurrentAudio();
+});
 </script>
 </body>
 </html>
