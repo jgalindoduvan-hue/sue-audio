@@ -42,7 +42,7 @@ footer{color:var(--muted);font-size:.82rem;padding:0 3px 20px}
 <main>
 <header>
 <h1>🎧 Valentina · Audio del chat</h1>
-<p>Lee en voz alta únicamente los comentarios de la gente usando tu voz de Fish Audio.</p>
+<p>Lee en voz alta únicamente los comentarios de los usuarios usando tu voz de Fish Audio.</p>
 </header>
 
 <section class="card">
@@ -51,7 +51,7 @@ footer{color:var(--muted);font-size:.82rem;padding:0 3px 20px}
 <button id="connect" class="primary">Conectar con Valentina</button>
 <button id="stop">Detener conexión</button>
 </div>
-<p class="note" style="margin-top:12px">Los comentarios antiguos, regalos y eventos del sistema no se leen.</p>
+<p class="note" style="margin-top:12px">Los comentarios antiguos, mensajes propios, regalos y eventos del sistema no se leen.</p>
 </section>
 
 <section class="card">
@@ -109,8 +109,15 @@ const firebaseConfig = {
   appId: "1:802700860379:web:b7f114b77101f9d4e725fe"
 };
 
-// Worker de Fish Audio
+// Fish Audio está configurado en el Worker.
 const FISH_WORKER_URL = "https://long-violet-52e4valentina-sue.jgalindoduvan.workers.dev/";
+
+// IMPORTANTE:
+// Escribe aquí el usuario o identificador exacto de la cuenta de Valentina.
+// Puedes añadir varios identificadores si utilizas más de una cuenta.
+const OWN_ACCOUNT_IDS = [
+  "valentina"
+];
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -127,7 +134,8 @@ let speaking = false;
 let seenIds = new Set();
 let firstSnapshot = true;
 
-// Protección contra comentarios duplicados.
+// Evitar duplicados incluso si Firebase guarda el mismo comentario
+// con identificadores diferentes.
 const recentContent = new Map();
 const pendingSpeechKeys = new Set();
 const DUPLICATE_WINDOW_MS = 30000;
@@ -144,6 +152,17 @@ function setStatus(text, kind="") {
   $("dot").className = "dot" + (kind ? " " + kind : "");
 }
 
+function normalizeForDedup(value) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/^@+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function sanitizeForSpeech(value) {
   return String(value ?? "")
     .normalize("NFKC")
@@ -155,25 +174,58 @@ function sanitizeForSpeech(value) {
     .trim();
 }
 
-function normalizeForDedup(value) {
-  return String(value ?? "")
-    .normalize("NFKC")
-    .toLocaleLowerCase("es")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+// Obtiene los posibles identificadores del autor.
+// Se comprueban distintos campos por si el emisor los guarda
+// con nombres diferentes en Firebase.
+function getAuthorIdentifiers(item) {
+  const values = [
+    item?.username,
+    item?.uniqueId,
+    item?.nickname,
+    item?.displayName,
+    item?.userName,
+    item?.user?.username,
+    item?.user?.uniqueId,
+    item?.user?.nickname,
+    item?.user?.displayName,
+    item?.author?.username,
+    item?.author?.uniqueId,
+    item?.author?.nickname
+  ];
+
+  return values
+    .filter(Boolean)
+    .map(value => normalizeForDedup(value));
+}
+
+// Comprueba si el mensaje procede de la propia Valentina.
+function isOwnAccount(item) {
+  const authorIds = getAuthorIdentifiers(item);
+  const ownIds = OWN_ACCOUNT_IDS.map(normalizeForDedup);
+
+  return authorIds.some(id => ownIds.includes(id));
 }
 
 function isHumanComment(item) {
   if (!item || item.type !== "chat") return false;
 
+  // No leer los mensajes escritos por la propia Valentina.
+  if (isOwnAccount(item)) {
+    console.debug("[Valentina Audio] Mensaje propio ignorado:", getAuthorIdentifiers(item));
+    return false;
+  }
+
   const raw = String(item.text ?? item.message ?? "").trim();
+
   if (!raw) return false;
 
+  // Ignorar comandos.
   if (/^(?:\/|!)(?:play|skip)\b/i.test(raw)) return false;
 
-  if (/ha empezado a seguir|empez[oó] a seguir|started following|joined the live|se ha unido|entr[oó] al live|ha compartido el live|comparti[oó] el live|shared the live|ha enviado|envi[oó] un regalo|sent a gift|gifted|regalo de|ha dado me gusta|liked the live/i.test(raw)) return false;
+  // Ignorar eventos del sistema.
+  if (/ha empezado a seguir|empez[oó] a seguir|started following|joined the live|se ha unido|entr[oó] al live|ha compartido el live|comparti[oó] el live|shared the live|ha enviado|envi[oó] un regalo|sent a gift|gifted|regalo de|ha dado me gusta|liked the live/i.test(raw)) {
+    return false;
+  }
 
   return Boolean(sanitizeForSpeech(raw));
 }
@@ -228,18 +280,20 @@ async function playText(text) {
   audio.volume = Number($("volume").value);
   audio.playbackRate = Number($("speed").value) || 1;
 
-  await audio.play();
+  try {
+    await audio.play();
 
-  await new Promise((resolve, reject) => {
-    audio.onended = resolve;
-    audio.onerror = () => reject(new Error("No se pudo reproducir el audio generado."));
-  });
+    await new Promise((resolve, reject) => {
+      audio.onended = resolve;
+      audio.onerror = () => reject(new Error("No se pudo reproducir el audio generado."));
+    });
+  } finally {
+    URL.revokeObjectURL(url);
 
-  URL.revokeObjectURL(url);
-
-  if (currentAudioUrl === url) {
-    currentAudioUrl = null;
-    currentAudio = null;
+    if (currentAudioUrl === url) {
+      currentAudioUrl = null;
+      currentAudio = null;
+    }
   }
 }
 
@@ -256,7 +310,6 @@ function stopCurrentAudio() {
   }
 }
 
-// Una sola cola de reproducción.
 async function runQueue() {
   if (speaking || !queue.length || !audioUnlocked) return;
 
@@ -286,14 +339,12 @@ async function runQueue() {
   }
 }
 
-// Genera una clave por usuario + comentario.
-// Así detecta el mismo texto aunque Firebase le asigne otro ID.
 function speakComment(item, firebaseId = "") {
   if (!isHumanComment(item)) return false;
 
-  const username = sanitizeForSpeech(item.username || "")
-    .replace(/^\s*@+/, "")
-    .trim();
+  const username = sanitizeForSpeech(
+    item.username || item.nickname || item.displayName || item.uniqueId || ""
+  ).replace(/^\s*@+/, "").trim();
 
   const comment = sanitizeForSpeech(item.text ?? item.message ?? "");
 
@@ -304,15 +355,13 @@ function speakComment(item, firebaseId = "") {
 
   const now = Date.now();
 
-  // Elimina registros de duplicados que ya caducaron.
+  // Limpiar entradas antiguas del sistema ant duplicados.
   for (const [key, timestamp] of recentContent) {
     if (now - timestamp > DUPLICATE_WINDOW_MS) {
       recentContent.delete(key);
     }
   }
 
-  // Si el mismo comentario ya está pendiente o acaba de llegar,
-  // no se vuelve a añadir a la cola.
   const lastSeen = recentContent.get(contentKey) || 0;
 
   if (
@@ -355,12 +404,9 @@ async function activateAudio() {
       : "Audio activado · conecta con Valentina.",
     connected ? "good" : ""
   );
-
-  runQueue();
 }
 
 async function connect() {
-  // Evita conectar dos veces por doble clic.
   if (connected || connecting) return;
 
   connecting = true;
@@ -378,54 +424,54 @@ async function connect() {
     firstSnapshot = true;
     seenIds = new Set();
 
-    unsubscribe = onValue(messagesRef, snap => {
-      const data = snap.val() || {};
+    unsubscribe = onValue(
+      messagesRef,
+      snap => {
+        const data = snap.val() || {};
 
-      const entries = Object.entries(data).sort(
-        (a,b) => (a[1]?.createdAt || 0) - (b[1]?.createdAt || 0)
-      );
+        const entries = Object.entries(data).sort(
+          (a,b) => (a[1]?.createdAt || 0) - (b[1]?.createdAt || 0)
+        );
 
-      // La primera lectura solo registra los mensajes antiguos.
-      // No reproduce el historial anterior.
-      if (firstSnapshot) {
-        entries.forEach(([id]) => seenIds.add(id));
+        // Ignorar los mensajes que ya existían al conectar.
+        if (firstSnapshot) {
+          entries.forEach(([id]) => seenIds.add(id));
 
-        firstSnapshot = false;
-        connected = true;
+          firstSnapshot = false;
+          connected = true;
+          connecting = false;
+
+          setStatus(
+            "Conectada · esperando comentarios nuevos de los usuarios.",
+            "good"
+          );
+
+          return;
+        }
+
+        for (const [id, item] of entries) {
+          if (seenIds.has(id)) continue;
+
+          seenIds.add(id);
+          speakComment(item, id);
+        }
+
+        // Evitar que el conjunto de IDs crezca indefinidamente.
+        if (seenIds.size > 1000) {
+          const currentIds = new Set(entries.map(([id]) => id));
+
+          seenIds = new Set(
+            [...seenIds].filter(id => currentIds.has(id))
+          );
+        }
+      },
+      error => {
         connecting = false;
+        connected = false;
 
-        setStatus(
-          "Conectada con Valentina · esperando comentarios nuevos.",
-          "good"
-        );
-
-        return;
+        setStatus(`Error de Firebase: ${error.message}`, "bad");
       }
-
-      // Procesa únicamente identificadores nuevos.
-      for (const [id, item] of entries) {
-        if (seenIds.has(id)) continue;
-
-        seenIds.add(id);
-        speakComment(item, id);
-      }
-
-      // Mantiene el conjunto de IDs limitado a los mensajes
-      // que siguen presentes en la consulta.
-      if (seenIds.size > 1000) {
-        const currentIds = new Set(entries.map(([id]) => id));
-
-        seenIds = new Set(
-          [...seenIds].filter(id => currentIds.has(id))
-        );
-      }
-
-    }, error => {
-      connecting = false;
-      connected = false;
-
-      setStatus(`Error de Firebase: ${error.message}`, "bad");
-    });
+    );
 
   } catch (error) {
     connecting = false;
@@ -511,21 +557,22 @@ function startKeepAliveWatchdog() {
   }, 5000);
 }
 
-// Botones principales.
-$("connect").addEventListener("click", connect);
+// BOTONES
+$("connect").addEventListener("click", async () => {
+  await activateAudio();
+  await connect();
+});
+
 $("stop").addEventListener("click", disconnect);
 
 $("test").addEventListener("click", async () => {
   await activateAudio();
 
-  const testKey = `__test__${Date.now()}`;
-
   queue.push({
     text: "Hola, esta es la prueba de voz de Valentina.",
-    key: testKey
+    key: `__test__${Date.now()}`
   });
 
-  pendingSpeechKeys.add(testKey);
   runQueue();
 });
 
@@ -533,7 +580,6 @@ $("clear").addEventListener("click", () => {
   $("log").replaceChildren();
 });
 
-// Velocidad.
 $("speed").addEventListener("input", () => {
   $("speedVal").textContent =
     `${Number($("speed").value).toFixed(2).replace(/0$/,"")}×`;
@@ -543,17 +589,15 @@ $("speed").addEventListener("input", () => {
   }
 });
 
-// Volumen.
 $("volume").addEventListener("input", () => {
   $("volumeVal").textContent =
-    `${Math.round(Number($("volume").value)*100)}%`;
+    `${Math.round(Number($("volume").value) * 100)}%`;
 
   if (currentAudio) {
     currentAudio.volume = Number($("volume").value);
   }
 });
 
-// Audio continuo.
 $("keepAlive").addEventListener("change", async () => {
   if ($("keepAlive").checked) {
     await startKeepAlive();
@@ -591,7 +635,6 @@ document.addEventListener("visibilitychange", async () => {
 window.addEventListener("pagehide", () => {
   if (unsubscribe) unsubscribe();
   stopCurrentAudio();
-  stopKeepAlive();
 });
 </script>
 </body>
