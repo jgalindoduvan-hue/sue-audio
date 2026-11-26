@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="es">
 <head>
@@ -28,14 +27,20 @@ label{display:block;margin:12px 0 6px;font-weight:600}
 input[type=range]{width:100%}
 .check{display:flex;align-items:center;gap:9px;font-weight:500;margin:10px 0}
 .check input{width:18px;height:18px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.voice-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px}
+.voice-option{display:flex;align-items:center;gap:8px;margin:0;padding:10px;background:#120c1b;border:1px solid #513166;border-radius:10px;font-size:.92rem}
+.voice-option input{width:18px;height:18px;accent-color:var(--pink);flex:0 0 auto}
+.voice-option span{overflow-wrap:anywhere}
+.voice-option.active{border-color:var(--pink);box-shadow:0 0 10px #ff36cf22}
+.mode-active{border-color:var(--pink)!important;box-shadow:0 0 12px #ff36cf55}
 .note{font-size:.9rem;color:var(--muted)}
 #log{display:flex;flex-direction:column;gap:8px;max-height:270px;overflow:auto}
 .msg{padding:10px 12px;background:#120c1b;border:1px solid #392249;border-radius:10px;overflow-wrap:anywhere}
 .msg strong{color:#ff8be2}
 .msg small{display:block;color:var(--muted);margin-top:3px}
 footer{color:var(--muted);font-size:.82rem;padding:0 3px 20px}
-@media(max-width:540px){body{padding:12px}.card{padding:14px}.grid{grid-template-columns:1fr}.buttons button{flex:1 1 100%}}
+@media(max-width:540px){body{padding:12px}.card{padding:14px}.grid{grid-template-columns:1fr 1fr}.voice-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.buttons button{flex:1 1 100%}}
 </style>
 </head>
 <body>
@@ -55,7 +60,13 @@ footer{color:var(--muted);font-size:.82rem;padding:0 3px 20px}
 </section>
 
 <section class="card">
-<h2 style="margin:0 0 8px">Voz de Valentina · Fish Audio</h2>
+<h2 style="margin:0 0 6px">🎙️ Voces disponibles · Fish Audio</h2>
+<p class="note">Marca una o varias voces. Si marcas varias, cada comentario nuevo se asignará a una voz distinta, por turnos.</p>
+<div id="voiceList" class="voice-grid"></div>
+<div class="buttons" style="margin-top:12px">
+<button id="randomMode" type="button" aria-pressed="false">🎲 Modo aleatorio: desactivado</button>
+<button id="selectAngela" type="button">Usar solo Ángela</button>
+</div>
 <label class="check"><input id="readNames" type="checkbox" checked> Leer el nombre del usuario</label>
 <div class="grid">
 <div>
@@ -68,10 +79,10 @@ footer{color:var(--muted);font-size:.82rem;padding:0 3px 20px}
 </div>
 </div>
 <div class="buttons" style="margin-top:14px">
-<button id="test" class="primary">Probar voz</button>
+<button id="test" class="primary">Probar voz seleccionada</button>
 <button id="clear">Limpiar lista</button>
 </div>
-<p class="note" id="voiceStatus">Voz configurada: Voz Juvenil Animada y Enérgica.</p>
+<p class="note" id="voiceStatus">Voz seleccionada: Ángela.</p>
 </section>
 
 <section class="card">
@@ -111,10 +122,110 @@ const firebaseConfig = {
 
 // Fish Audio está configurado en el Worker.
 const FISH_WORKER_URL = "https://long-violet-52e4valentina-sue.jgalindoduvan.workers.dev/";
+const $ = id => document.getElementById(id);
 
-// IMPORTANTE:
-// Escribe aquí el usuario o identificador exacto de la cuenta de Valentina.
-// Puedes añadir varios identificadores si utilizas más de una cuenta.
+// Catálogo de voces públicas. Ángela conserva la voz que ya utilizabas.
+const VOICES = [
+  ["Ángela", "91fca828397245d7826073cb518f6e16"],
+  ["Nana", "bf19830b053e41d9ad51d245d2b77908"],
+  ["Beatrix", "f186abac69be416f82b082b62969207c"],
+  ["Carmilla", "50d458065c1b4c1c8437e3c7489acdd5"],
+  ["Layla", "d64d4fd54f454674a8f5f0626846d4f4"],
+  ["Alice", "ffc9c3d154a24395a9ab53e003796116"],
+  ["Adith", "ee117e778dba4c95b71a290430591043"],
+  ["Marcel", "518bbbf074684298b344705a05396e7d"],
+  ["Melisa", "4920be5ec79d46338dd8bf0ba431a492"],
+  ["Esmeralda", "e83e348bd6be4fd9bbd7c8f1bc1e4465"],
+  ["Cecilion", "b1cb5c2871d0496896323efe89624445"],
+  ["Franco", "055207764aaa4c6fbb2b956cf9558187"],
+  ["Kagura", "b09dc7e666eb4b04aa66e1cbd62eb946"],
+  ["Selena", "caff2a20b4314ba3870c50707a7f5ebe"],
+  ["Joy Onic", "e4ee8b9f36cc4c7ca0149d78c6a191ee"],
+  ["Zhuxin", "f2345ee190bc4ce28307eac5b2195d58"],
+  ["Zilong", "408109d351ce474cb66586f5a00ee416"],
+  ["Aurora", "a370b212f87a4479a9ffea021609e46d"],
+  ["Masha", "fca6586e2e304566a208b12a70ca8a4b"],
+  ["Hirara", "fad40913079d4c378a2909cc58206a7d"],
+  ["Suyou", "2d3a6a67a62e4d8a9f3619fd26c29903"],
+  ["Estes", "37db47f4c0894c0d9a3661abca7955c2"],
+  ["Satoru", "186ef947db9f4ff4b44600392aaec68f"],
+  ["Gloo", "a828287a57dc4ba69622a3c8910131f7"]
+];
+
+let randomVoiceMode = false;
+let voiceRoundRobinIndex = 0;
+
+function renderVoiceList() {
+  const container = $("voiceList");
+  container.replaceChildren();
+
+  for (const [name, id] of VOICES) {
+    const label = document.createElement("label");
+    label.className = "voice-option" + (id === VOICES[0][1] ? " active" : "");
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.name = "fishVoice";
+    checkbox.value = id;
+    checkbox.checked = id === VOICES[0][1];
+
+    checkbox.addEventListener("change", () => {
+      label.classList.toggle("active", checkbox.checked);
+      updateVoiceStatus();
+    });
+
+    const text = document.createElement("span");
+    text.textContent = name;
+
+    label.append(checkbox, text);
+    container.append(label);
+  }
+}
+
+function getSelectedVoices() {
+  const selectedIds = [
+    ...document.querySelectorAll('input[name="fishVoice"]:checked')
+  ].map(el => el.value);
+
+  return VOICES.filter(([, id]) => selectedIds.includes(id));
+}
+
+function chooseVoice() {
+  if (randomVoiceMode) {
+    return VOICES[Math.floor(Math.random() * VOICES.length)];
+  }
+
+  const selected = getSelectedVoices();
+
+  if (!selected.length) {
+    const angela = document.querySelector(
+      'input[name="fishVoice"][value="' + VOICES[0][1] + '"]'
+    );
+
+    if (angela) angela.checked = true;
+    return VOICES[0];
+  }
+
+  const chosen = selected[voiceRoundRobinIndex % selected.length];
+  voiceRoundRobinIndex++;
+
+  return chosen;
+}
+
+function updateVoiceStatus() {
+  const selected = getSelectedVoices();
+  const names = selected.map(([name]) => name);
+
+  $("voiceStatus").textContent = randomVoiceMode
+    ? "Modo aleatorio activo: se elegirá entre las 24 voces."
+    : names.length
+      ? "Voces activas: " + names.join(", ") + ". Reparto por turnos."
+      : "No hay voces marcadas; se utilizará Ángela.";
+}
+
+renderVoiceList();
+
+// Identificadores de la cuenta de Valentina.
 const OWN_ACCOUNT_IDS = [
   "valentina"
 ];
@@ -123,7 +234,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 const room = "main";
-const $ = id => document.getElementById(id);
 
 let unsubscribe = null;
 let connected = false;
@@ -134,8 +244,6 @@ let speaking = false;
 let seenIds = new Set();
 let firstSnapshot = true;
 
-// Evitar duplicados incluso si Firebase guarda el mismo comentario
-// con identificadores diferentes.
 const recentContent = new Map();
 const pendingSpeechKeys = new Set();
 const DUPLICATE_WINDOW_MS = 30000;
@@ -174,9 +282,6 @@ function sanitizeForSpeech(value) {
     .trim();
 }
 
-// Obtiene los posibles identificadores del autor.
-// Se comprueban distintos campos por si el emisor los guarda
-// con nombres diferentes en Firebase.
 function getAuthorIdentifiers(item) {
   const values = [
     item?.username,
@@ -198,7 +303,6 @@ function getAuthorIdentifiers(item) {
     .map(value => normalizeForDedup(value));
 }
 
-// Comprueba si el mensaje procede de la propia Valentina.
 function isOwnAccount(item) {
   const authorIds = getAuthorIdentifiers(item);
   const ownIds = OWN_ACCOUNT_IDS.map(normalizeForDedup);
@@ -209,7 +313,6 @@ function isOwnAccount(item) {
 function isHumanComment(item) {
   if (!item || item.type !== "chat") return false;
 
-  // No leer los mensajes escritos por la propia Valentina.
   if (isOwnAccount(item)) {
     console.debug("[Valentina Audio] Mensaje propio ignorado:", getAuthorIdentifiers(item));
     return false;
@@ -219,10 +322,8 @@ function isHumanComment(item) {
 
   if (!raw) return false;
 
-  // Ignorar comandos.
   if (/^(?:\/|!)(?:play|skip)\b/i.test(raw)) return false;
 
-  // Ignorar eventos del sistema.
   if (/ha empezado a seguir|empez[oó] a seguir|started following|joined the live|se ha unido|entr[oó] al live|ha compartido el live|comparti[oó] el live|shared the live|ha enviado|envi[oó] un regalo|sent a gift|gifted|regalo de|ha dado me gusta|liked the live/i.test(raw)) {
     return false;
   }
@@ -254,23 +355,28 @@ function addLog(username, text) {
   }
 }
 
-async function generateSpeech(text) {
+async function generateSpeech(text, voiceId) {
   const response = await fetch(FISH_WORKER_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text })
+    body: JSON.stringify({
+      text,
+      reference_id: voiceId
+    })
   });
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Fish Audio / Worker (${response.status}): ${detail.slice(0,300)}`);
+    throw new Error(
+      `Fish Audio / Worker (${response.status}): ${detail.slice(0,300)}`
+    );
   }
 
   return await response.blob();
 }
 
-async function playText(text) {
-  const blob = await generateSpeech(text);
+async function playText(text, voiceId) {
+  const blob = await generateSpeech(text, voiceId);
   const url = URL.createObjectURL(blob);
 
   currentAudioUrl = url;
@@ -285,7 +391,9 @@ async function playText(text) {
 
     await new Promise((resolve, reject) => {
       audio.onended = resolve;
-      audio.onerror = () => reject(new Error("No se pudo reproducir el audio generado."));
+      audio.onerror = () => reject(
+        new Error("No se pudo reproducir el audio generado.")
+      );
     });
   } finally {
     URL.revokeObjectURL(url);
@@ -320,7 +428,7 @@ async function runQueue() {
       const entry = queue.shift();
 
       try {
-        await playText(entry.text);
+        await playText(entry.text, entry.voiceId);
       } catch (error) {
         console.error(error);
         $("voiceStatus").textContent = error.message;
@@ -355,7 +463,6 @@ function speakComment(item, firebaseId = "") {
 
   const now = Date.now();
 
-  // Limpiar entradas antiguas del sistema ant duplicados.
   for (const [key, timestamp] of recentContent) {
     if (now - timestamp > DUPLICATE_WINDOW_MS) {
       recentContent.delete(key);
@@ -384,12 +491,15 @@ function speakComment(item, firebaseId = "") {
     ? `${username} dice ${comment}`
     : comment;
 
+  const [voiceName, voiceId] = chooseVoice();
+
   queue.push({
     text,
+    voiceId,
     key: contentKey
   });
 
-  addLog(username, comment);
+  addLog(username, comment + " · Voz: " + voiceName);
   runQueue();
 
   return true;
@@ -433,7 +543,6 @@ async function connect() {
           (a,b) => (a[1]?.createdAt || 0) - (b[1]?.createdAt || 0)
         );
 
-        // Ignorar los mensajes que ya existían al conectar.
         if (firstSnapshot) {
           entries.forEach(([id]) => seenIds.add(id));
 
@@ -456,7 +565,6 @@ async function connect() {
           speakComment(item, id);
         }
 
-        // Evitar que el conjunto de IDs crezca indefinidamente.
         if (seenIds.size > 1000) {
           const currentIds = new Set(entries.map(([id]) => id));
 
@@ -568,12 +676,44 @@ $("stop").addEventListener("click", disconnect);
 $("test").addEventListener("click", async () => {
   await activateAudio();
 
+  const [voiceName, voiceId] = chooseVoice();
+
   queue.push({
-    text: "Hola, esta es la prueba de voz de Valentina.",
+    text: "Hola, esta es la prueba de voz de Valentina. Esta prueba utiliza la voz " + voiceName + ".",
+    voiceId,
     key: `__test__${Date.now()}`
   });
 
+  updateVoiceStatus();
   runQueue();
+});
+
+$("randomMode").addEventListener("click", () => {
+  randomVoiceMode = !randomVoiceMode;
+
+  const button = $("randomMode");
+  button.setAttribute("aria-pressed", String(randomVoiceMode));
+  button.classList.toggle("mode-active", randomVoiceMode);
+  button.textContent = randomVoiceMode
+    ? "🎲 Modo aleatorio: activado"
+    : "🎲 Modo aleatorio: desactivado";
+
+  updateVoiceStatus();
+});
+
+$("selectAngela").addEventListener("click", () => {
+  document.querySelectorAll('input[name="fishVoice"]').forEach(el => {
+    el.checked = el.value === VOICES[0][1];
+    el.closest(".voice-option")?.classList.toggle("active", el.checked);
+  });
+
+  randomVoiceMode = false;
+  $("randomMode").setAttribute("aria-pressed", "false");
+  $("randomMode").classList.remove("mode-active");
+  $("randomMode").textContent = "🎲 Modo aleatorio: desactivado";
+
+  voiceRoundRobinIndex = 0;
+  updateVoiceStatus();
 });
 
 $("clear").addEventListener("click", () => {
@@ -636,6 +776,8 @@ window.addEventListener("pagehide", () => {
   if (unsubscribe) unsubscribe();
   stopCurrentAudio();
 });
+
+updateVoiceStatus();
 </script>
 </body>
 </html>
