@@ -35,6 +35,8 @@ input[type=range]{width:100%}
 .voice-option.active{border-color:var(--pink);box-shadow:0 0 10px #ff36cf22}
 .mode-active{border-color:var(--pink)!important;box-shadow:0 0 12px #ff36cf55}
 .note{font-size:.9rem;color:var(--muted)}
+.nt-panel{display:none}.nt-panel.open{display:block}.nt-event{padding:12px;border:1px solid #513166;border-radius:12px;background:#120c1b;margin-top:10px}.nt-event strong{color:#ff8be2}.nt-status{font-size:.9rem;color:var(--muted);margin-top:8px}
+#ntLog{display:flex;flex-direction:column;gap:8px;max-height:190px;overflow:auto}
 #log{display:flex;flex-direction:column;gap:8px;max-height:270px;overflow:auto}
 .msg{padding:10px 12px;background:#120c1b;border:1px solid #392249;border-radius:10px;overflow-wrap:anywhere}
 .msg strong{color:#ff8be2}
@@ -56,7 +58,7 @@ footer{color:var(--muted);font-size:.82rem;padding:0 3px 20px}
 <button id="connect" class="primary">Conectar con Valentina</button>
 <button id="stop">Detener conexión</button>
 </div>
-<p class="note" style="margin-top:12px">Los comentarios antiguos, mensajes propios, regalos y eventos del sistema no se leen.</p>
+<p class="note" style="margin-top:12px">Los comentarios antiguos, mensajes propios, regalos y eventos del sistema no se leen en el TTS normal. NT puede detectar los agradecimientos de Valentina si está activado.</p>
 </section>
 
 <section class="card">
@@ -83,6 +85,31 @@ footer{color:var(--muted);font-size:.82rem;padding:0 3px 20px}
 <button id="clear">Limpiar lista</button>
 </div>
 <p class="note" id="voiceStatus">Voz seleccionada: Ángela.</p>
+</section>
+
+<section class="card">
+<div class="buttons" style="align-items:center;justify-content:space-between">
+  <div>
+    <h2 style="margin:0">🔔 NT · Notificaciones</h2>
+    <p class="note" style="margin:4px 0 0">Detecta los agradecimientos de Valentina y los convierte en alertas habladas.</p>
+  </div>
+  <button id="ntPanelToggle" class="primary" type="button" aria-expanded="false">Abrir NT</button>
+</div>
+<div id="ntPanel" class="nt-panel">
+  <div class="nt-event">
+    <label class="check"><input id="ntEnabled" type="checkbox" checked> Activar notificaciones NT</label>
+    <label class="check"><input id="ntLikesEnabled" type="checkbox" checked> Alertas de quiereme</label>
+    <label class="check"><input id="ntFollowsEnabled" type="checkbox" checked> Alertas de nuevos seguidores</label>
+    <label class="check"><input id="ntRandomPhrases" type="checkbox" checked> Elegir frases aleatorias</label>
+  </div>
+  <div class="buttons" style="margin-top:12px">
+    <button id="ntTestLike" type="button">Probar alerta quiereme</button>
+    <button id="ntTestFollow" type="button">Probar alerta seguidor</button>
+  </div>
+  <p id="ntStatus" class="nt-status">NT preparado. Se activará al conectar y recibir mensajes nuevos de Valentina.</p>
+  <h3 style="margin:16px 0 8px">Alertas detectadas</h3>
+  <div id="ntLog"><div class="msg">Todavía no hay alertas.</div></div>
+</div>
 </section>
 
 <section class="card">
@@ -308,6 +335,111 @@ function isOwnAccount(item) {
   const ownIds = OWN_ACCOUNT_IDS.map(normalizeForDedup);
 
   return authorIds.some(id => ownIds.includes(id));
+}
+
+// NT escucha los mensajes del bot Valentina, pero no los manda al TTS normal.
+function isValentinaMessage(item) {
+  const ids = getAuthorIdentifiers(item);
+  return ids.some(id => id === "valentina" || id.includes("valentina"));
+}
+
+const NT_PHRASES = [
+  "¡Abracadabra!",
+  "¡Sigue sonriendo!",
+  "¡Mantente alegre todos los días!",
+  "¡Mantente de buen humor todos los días!",
+  "El amor y la esperanza son las dos invenciones más grandes."
+];
+
+const NT_LIKE_THANKS = [
+  "gracias por ese quiereme. ¡Que tengas un día maravilloso!",
+  "muchas gracias por ese cariño. ¡Sigue brillando!",
+  "gracias por tu quiereme. ¡Que nunca te falten motivos para sonreír!",
+  "te agradezco ese cariño. ¡Vamos con toda la buena energía!"
+];
+
+const NT_FOLLOW_THANKS = [
+  "gracias por seguirme. ¡Bienvenido a esta aventura!",
+  "gracias por sumarte. ¡Que tengas un día increíble!",
+  "gracias por acompañarnos. ¡Sigue brillando!",
+  "gracias por seguirme. ¡Aquí siempre hay buena energía!"
+];
+
+const ntProcessedIds = new Set();
+
+function pickNT(list) {
+  return $("ntRandomPhrases")?.checked === false ? list[0] : list[Math.floor(Math.random() * list.length)];
+}
+
+function extractMentionName(raw) {
+  const clean = String(raw || "")
+    .replace(/https?:\/\/\S+/giu, " ")
+    .replace(/[🌹💖❤️💕✨🎉🥰😍]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const mention = clean.match(/@([\p{L}\p{N}_.-]+)/u);
+  if (mention) return sanitizeForSpeech(mention[1]);
+  return "";
+}
+
+function detectNTEvent(item) {
+  const raw = String(item?.text ?? item?.message ?? "").trim();
+  if (!raw) return null;
+  const normalized = raw.normalize("NFKC").toLocaleLowerCase("es");
+  const name = extractMentionName(raw) || "amigo";
+
+  if (/gracias\s+por\s+el\s+qui[eé]reme|gracias\s+por\s+ese\s+qui[eé]reme|gracias\s+por\s+tu\s+qui[eé]reme/i.test(normalized)) {
+    return { type: "like", name };
+  }
+
+  if (/gracias\s+por\s+seguir(?:me)?|gracias\s+por\s+seguir\s+a\s+sue|gracias\s+por\s+el\s+follow/i.test(normalized)) {
+    return { type: "follow", name };
+  }
+
+  return null;
+}
+
+function addNTLog(text, type) {
+  const box = $("ntLog");
+  if (box.querySelector(".msg")?.textContent === "Todavía no hay alertas.") box.replaceChildren();
+  const row = document.createElement("div");
+  row.className = "msg";
+  const title = document.createElement("strong");
+  title.textContent = type === "like" ? "💖 Quiereme" : "🌟 Nuevo seguidor";
+  const body = document.createElement("div");
+  body.textContent = text;
+  row.append(title, body);
+  box.prepend(row);
+  while (box.children.length > 20) box.lastElementChild.remove();
+}
+
+function queueNTAlert(event, test = false) {
+  const phrase = pickNT(NT_PHRASES);
+  const thanks = pickNT(event.type === "like" ? NT_LIKE_THANKS : NT_FOLLOW_THANKS);
+  const text = `${phrase} @${event.name}, ${thanks}`;
+  const [voiceName, voiceId] = chooseVoice();
+  const key = `nt:${event.type}:${event.name}:${Date.now()}:${Math.random()}`;
+  queue.push({ text, voiceId, key });
+  addNTLog(text + ` · Voz: ${voiceName}`, event.type);
+  $("ntStatus").textContent = test
+    ? "Prueba NT añadida a la cola de audio."
+    : `Alerta ${event.type === "like" ? "de quiereme" : "de nuevo seguidor"} detectada.`;
+  runQueue();
+}
+
+function handleNTMessage(item, firebaseId) {
+  if (!$("ntEnabled").checked || !isValentinaMessage(item)) return false;
+  if (firebaseId && ntProcessedIds.has(firebaseId)) return false;
+  const event = detectNTEvent(item);
+  if (!event) return false;
+  if (event.type === "like" && !$("ntLikesEnabled").checked) return false;
+  if (event.type === "follow" && !$("ntFollowsEnabled").checked) return false;
+  if (firebaseId) {
+    ntProcessedIds.add(firebaseId);
+    if (ntProcessedIds.size > 1000) ntProcessedIds.clear();
+  }
+  queueNTAlert(event);
+  return true;
 }
 
 function isHumanComment(item) {
@@ -562,6 +694,7 @@ async function connect() {
           if (seenIds.has(id)) continue;
 
           seenIds.add(id);
+          handleNTMessage(item, id); // NT detecta eventos de Valentina sin leer su mensaje original.
           speakComment(item, id);
         }
 
@@ -664,6 +797,30 @@ function startKeepAliveWatchdog() {
     }
   }, 5000);
 }
+
+// PANEL Y CONTROLES DE NT
+$("ntPanelToggle").addEventListener("click", () => {
+  const panel = $("ntPanel");
+  const open = panel.classList.toggle("open");
+  $("ntPanelToggle").textContent = open ? "Cerrar NT" : "Abrir NT";
+  $("ntPanelToggle").setAttribute("aria-expanded", String(open));
+});
+
+$("ntEnabled").addEventListener("change", () => {
+  $("ntStatus").textContent = $("ntEnabled").checked
+    ? "NT activado: detectando alertas en los mensajes nuevos de Valentina."
+    : "NT desactivado: los mensajes de Valentina se ignorarán.";
+});
+
+$("ntTestLike").addEventListener("click", async () => {
+  await activateAudio();
+  queueNTAlert({ type: "like", name: "Duvan" }, true);
+});
+
+$("ntTestFollow").addEventListener("click", async () => {
+  await activateAudio();
+  queueNTAlert({ type: "follow", name: "Alex" }, true);
+});
 
 // BOTONES
 $("connect").addEventListener("click", async () => {
@@ -781,4 +938,3 @@ updateVoiceStatus();
 </script>
 </body>
 </html>
-
