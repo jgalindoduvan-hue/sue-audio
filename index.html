@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="es">
 <head>
@@ -334,7 +335,11 @@ function isOwnAccount(item) {
   const authorIds = getAuthorIdentifiers(item);
   const ownIds = OWN_ACCOUNT_IDS.map(normalizeForDedup);
 
-  return authorIds.some(id => ownIds.includes(id));
+  // El nombre visible puede llegar como "Valentina Nº1", "Valentina Bot", etc.
+  // Si NT lo reconoce como mensaje de Valentina, el TTS normal también debe excluirlo.
+  return authorIds.some(id =>
+    ownIds.includes(id) || id.includes("valentina")
+  );
 }
 
 // NT escucha los mensajes del bot Valentina, pero no los manda al TTS normal.
@@ -343,29 +348,36 @@ function isValentinaMessage(item) {
   return ids.some(id => id === "valentina" || id.includes("valentina"));
 }
 
+// Frases pensadas para saludar y animar a quienes están disfrutando del LIVE.
 const NT_PHRASES = [
   "¡Abracadabra!",
   "¡Sigue sonriendo!",
-  "¡Mantente alegre todos los días!",
-  "¡Mantente de buen humor todos los días!",
-  "El amor y la esperanza son las dos invenciones más grandes."
+  "¡Qué alegría tenerte por aquí!",
+  "¡Que siga la buena energía en este LIVE!",
+  "¡La magia de este LIVE la haces tú!",
+  "¡Vamos a disfrutar este LIVE!"
 ];
 
 const NT_LIKE_THANKS = [
-  "gracias por ese quiereme. ¡Que tengas un día maravilloso!",
-  "muchas gracias por ese cariño. ¡Sigue brillando!",
-  "gracias por tu quiereme. ¡Que nunca te falten motivos para sonreír!",
-  "te agradezco ese cariño. ¡Vamos con toda la buena energía!"
+  "gracias por ese quiereme. ¡Disfruta mucho del LIVE!",
+  "muchas gracias por ese cariño. ¡Quédate y disfruta del directo!",
+  "gracias por tu quiereme. ¡Esto se pone mejor contigo aquí!",
+  "te agradezco ese cariño. ¡Vamos a seguir disfrutando del LIVE!",
+  "gracias por ese apoyo. ¡Ponte cómodo y disfruta del show!"
 ];
 
 const NT_FOLLOW_THANKS = [
-  "gracias por seguirme. ¡Bienvenido a esta aventura!",
-  "gracias por sumarte. ¡Que tengas un día increíble!",
-  "gracias por acompañarnos. ¡Sigue brillando!",
-  "gracias por seguirme. ¡Aquí siempre hay buena energía!"
+  "gracias por seguirme. ¡Bienvenido al LIVE, disfruta mucho!",
+  "gracias por sumarte. ¡Quédate a disfrutar del directo!",
+  "gracias por acompañarnos. ¡Ahora eres parte de esta fiesta!",
+  "gracias por seguirme. ¡Ponte cómodo que seguimos en directo!",
+  "gracias por unirte. ¡La diversión también es tuya!"
 ];
 
+// Evita repetir una misma alerta si Firebase guarda el mismo aviso con IDs distintos.
 const ntProcessedIds = new Set();
+const ntRecentEvents = new Map();
+const NT_DUPLICATE_WINDOW_MS = 120000;
 
 function pickNT(list) {
   return $("ntRandomPhrases")?.checked === false ? list[0] : list[Math.floor(Math.random() * list.length)];
@@ -430,14 +442,36 @@ function queueNTAlert(event, test = false) {
 function handleNTMessage(item, firebaseId) {
   if (!$("ntEnabled").checked || !isValentinaMessage(item)) return false;
   if (firebaseId && ntProcessedIds.has(firebaseId)) return false;
+
   const event = detectNTEvent(item);
   if (!event) return false;
   if (event.type === "like" && !$("ntLikesEnabled").checked) return false;
   if (event.type === "follow" && !$("ntFollowsEnabled").checked) return false;
-  if (firebaseId) {
-    ntProcessedIds.add(firebaseId);
-    if (ntProcessedIds.size > 1000) ntProcessedIds.clear();
+
+  const raw = String(item?.text ?? item?.message ?? "");
+  const semanticKey = `${event.type}:${normalizeForDedup(event.name)}:${normalizeForDedup(raw)}`;
+  const now = Date.now();
+
+  for (const [key, timestamp] of ntRecentEvents) {
+    if (now - timestamp > NT_DUPLICATE_WINDOW_MS) ntRecentEvents.delete(key);
   }
+
+  // El mismo agradecimiento puede llegar duplicado con distintos IDs de Firebase.
+  if (ntRecentEvents.has(semanticKey)) {
+    if (firebaseId) ntProcessedIds.add(firebaseId);
+    console.debug("[NT] Alerta duplicada ignorada:", semanticKey, firebaseId);
+    return false;
+  }
+
+  ntRecentEvents.set(semanticKey, now);
+  if (firebaseId) ntProcessedIds.add(firebaseId);
+  if (ntProcessedIds.size > 2000) {
+    // Mantener un conjunto acotado sin vaciar la protección de duplicados recientes.
+    const ids = [...ntProcessedIds];
+    ntProcessedIds.clear();
+    ids.slice(-1000).forEach(id => ntProcessedIds.add(id));
+  }
+
   queueNTAlert(event);
   return true;
 }
